@@ -1,0 +1,136 @@
+/*
+ * Take some time to understand the structure of the 3 tables introduced above:
+ * patients
+ * panels
+ * recommended_values
+ * There is something missing from one of the tables. Can you figure out what it is?
+ */
+SELECT *
+FROM patients
+LIMIT 5;
+
+SELECT *
+FROM panels
+LIMIT 5;
+
+SELECT *
+FROM recommended_values;
+
+/*
+ * Something seems weird in the panels table... Oh, there is a duplicate row. That's not helpful!
+ * Let's remove this row. Make sure you return the first 5 rows again to check that it's actually gone.
+ */
+DELETE FROM patients
+WHERE ID = 'ID';
+
+DELETE FROM panels
+WHERE ID = 'ID';
+
+SELECT *
+FROM panels
+LIMIT 5;
+
+/*
+ * Valaria Broadwell, a patient with ID 7, was an inactive patient at our lab but would like to become a regular patient again.
+ * Change her Status in patients table from inactive to active.
+ */
+UPDATE patients
+SET Status = 'active'
+WHERE ID = 7;
+
+/*
+ * Your lab thinks that data in patients table could be organized better. They want their inactive patients in a separate table from now on.
+ * Create a table called inactive_patients and copy all inactive patients into this table. This new table should have columns identical to the patients table.
+ */
+CREATE TABLE inactive_patients AS
+	SELECT *
+  FROM patients
+  WHERE Status = 'inactive';
+
+DELETE FROM patients
+WHERE Status = 'inactive';
+
+/*
+ * patients is not the best name for patients table anymore, is it?
+ * Change the name to active_patients.
+ */
+ALTER TABLE patients 
+RENAME TO active_patients;
+
+/*
+ * Did you know you can do arithmetic with SQL?
+ * Your lab's marketing team is trying to re-engage inactive patients. They want to know how many patients they'll need to convince.
+ * Find the percentage of active and inactive patients.
+ */
+WITH num_active AS(
+	SELECT ROUND(COUNT(*), 1) AS 'active'
+  FROM active_patients 
+),
+num_inactive AS(
+  SELECT ROUND(COUNT(*), 1) AS 'inactive'
+  FROM inactive_patients
+)
+SELECT ROUND((num_active.active * 100 / (num_active.active + num_inactive.inactive)), 2) AS 'percentage of active', ROUND((num_inactive.inactive * 100 / (num_active.active + num_inactive.inactive)), 2) AS 'percentage of inactive'
+FROM num_active, num_inactive;
+
+/*
+ * The most recent patient to visit the lab is the last patient in the active_patients table. Find out who it is, so we can ask them if they forgot their wallet.
+ * Challenge yourself to not just use ID = 99! That's too easy!
+ */
+SELECT * 
+FROM active_patients
+ORDER BY ID DESC
+LIMIT 1;
+
+/*
+ * Find patients that have come in for a lipid panel more than once.
+ * Use the panels table. You only need to list the patient_IDs for this.
+ */
+SELECT patient_ID, COUNT(*)
+FROM panels
+GROUP BY 1
+HAVING COUNT(*) > 1;
+
+/*
+ * Remember your panels table did not have an LDL column? Well, let's add it now.
+ * LDL is not calculated directly from the blood sample. Most specialists use the Friedewald Equation to estimate LDL from Total Cholesterol, HDL, and Triglycerides. This is the equation:
+ * LDL = Total\ Cholesterol - (HDL + Triglycerides/5)LDL=Total Cholesterol−(HDL+Triglycerides/5)
+ * Add LDL column to the panels table. Next, use this equation to populate this column.
+ */
+ALTER TABLE panels
+ADD COLUMN LDL DECIMAL(5,2);
+
+UPDATE panels
+SET LDL = Cholesterol - (HDL + Triglycerides / 5);
+
+/*
+ * LDL is the bad cholesterol. Patients with Borderline_High and High LDL levels may be at risk for heart disease.
+ * Find these patients, organize the list from High to Low, and round off the values. You should return the list in the following format:
+ * Name | LDL | Address | Phone
+ * While it was mentioned above that other lipids play a role in CAD risk as well, let's just focus on LDL here.
+ */
+SELECT active_patients.Name, ROUND(panels.LDL), active_patients.Address, active_patients.Phone
+FROM panels
+LEFT JOIN active_patients ON panels.patient_ID = active_patients.ID
+WHERE panels.LDL >= 130
+	AND Name IS NOT NULL
+GROUP BY Name
+ORDER BY 2 DESC;
+
+/*
+ * How many patients have Borderline_High levels of LDL? and How many patients have High levels of LDL?
+ * Your result should look like this:
+ * High | Borderline_High
+ */
+WITH count_high AS(
+	SELECT COUNT(*) AS 'High'
+  FROM panels
+  WHERE LDL >= 160
+),
+count_borderline_high AS(
+  SELECT COUNT(*) AS 'Borderline_High'
+  FROM panels
+  WHERE LDL >= 130 AND LDL < 160
+)
+SELECT *
+FROM count_high, count_borderline_high;
